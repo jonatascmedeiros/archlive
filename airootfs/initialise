@@ -21,127 +21,99 @@ _PlsWait="\nPlease wait... Even geduld aub... Bitte warten... Attendere prego...
 
 # Check there is an active ethernet connection. Wait a bit for dhcpcd.
 please_wait() {
-
-dialog --backtitle "$VERSION" --title " Searching for Network Connection " --infobox "$_PlsWait" 0 0
-sleep 8
-
+	dialog --backtitle "$VERSION" --title " Searching for Network Connection " --infobox "$_PlsWait" 0 0
+	sleep 8
 }
 
 # Run if the ethernet connection is not already enabled
 ether_connect() {
+	if [[ $(systemctl status dhcpcd | grep "running") == "" ]]; then
+		systemctl enable dhcpcd
+		systemctl start dhcpcd
+	fi
 
-if [[ $(systemctl status dhcpcd | grep "running") == "" ]]; then
-   systemctl enable dhcpcd
-   systemctl start dhcpcd
-fi
-
-dialog --backtitle "$VERSION" --title " Connecting to Ethernet " --infobox "$_PlsWait" 0 0
-sleep 5
+	dialog --backtitle "$VERSION" --title " Connecting to Ethernet " --infobox "$_PlsWait" 0 0
+	sleep 5
 }
 
 # If no ethernet and there is a wireless device recognised
 wifi_connect() {
+	# Stop dhcpcd if it is running
+	if [[ $(systemctl status dhcpcd | grep "running") != "" ]]; then
+		systemctl disable dhcpcd
+		systemctl stop dhcpcd
+	fi
+	# Unblock wlan switch
+	rfkill unblock wlan
 
-# Stop dhcpcd if it is running
-if [[ $(systemctl status dhcpcd | grep "running") != "" ]]; then
-   systemctl disable dhcpcd
-   systemctl stop dhcpcd
-fi
-
-# Set the link down else wifi-menu won't work
-ip link set $WIFI_DEV down >/dev/null 2>&1	
-			
-# Start wifi-menu
-clear
-wifi-menu
-dialog --backtitle "$VERSION" --title " Connecting Wifi " --infobox "$_PlsWait" 0 0 && sleep 2
-
+	# Set the link down else wifi-menu won't work
+	ip link set $WIFI_DEV down >/dev/null 2>&1	
+				
+	# Start wifi-menu
+	clear
+	wifi-menu
+	dialog --backtitle "$VERSION" --title " Connecting Wifi " --infobox "$_PlsWait" 0 0 && sleep 2
 }
 
 # Stable or Development Options available
 download_aif() {
-
-  # Provided there is a connection, then this menu will be available.
-  dialog --backtitle "$VERSION" --title " Installer Version " \
-  --menu $"\nPlease choose / Gelieve te kiezen / Bitte wählen / Scegli / Vennligst velg / Por favor elija\n\n1. Stable / stabiel / stabil / stabile / stabilny / estable\n\n2. Development / ontwikkeling / Entwicklung / sviluppo / utvikling / rozwój / desarrollo\n" 20 50 2 \
-  "1" $"Stable" \
-  "2" $"Development" 2>${OPT}
-  
-  case $(cat ${OPT}) in
-       "1") # Stable (Net)
-            clear
-            wget -N https://github.com/jonatascmedeiros/aif/archive/master.zip
-            unzip -o master.zip -d /
-            /aif-master/aif
-            ;;
-       "2") # Development Version
-            clear
-            wget -N https://github.com/CarlDuff/aif-dev/archive/master.zip
-            unzip -o master.zip -d /
-            /aif-dev-master/aif
-            ;;
-         *) break;
-            ;;
-  esac
-
+	clear
+	wget -N https://github.com/jonatascmedeiros/aif/archive/master.zip
+	unzip -o master.zip -d /
+	/aif-master/aif
 }
 
 # When complete (Whether successfully or unsuccessfully)
 inst_complete() {
+	dialog --backtitle "$VERSION" --title " Installation Complete " \
+		--menu $"\nPlease choose / Gelieve te kiezen / Bitte wählen / Scegli / Vennligst velg / Por favor elija\n" 0 0 3 \
+		"1" $"Reboot" \
+		"2" $"Shutdown" \
+		"3" $"Virtual Console" 2>${OPT}
 
-    dialog --backtitle "$VERSION" --title " Installation Complete " \
-  --menu $"\nPlease choose / Gelieve te kiezen / Bitte wählen / Scegli / Vennligst velg / Por favor elija\n" 0 0 3 \
-  "1" $"Reboot" \
-  "2" $"Shutdown" \
-  "3" $"Virtual Console" 2>${OPT}
-  
-   case $(cat ${OPT}) in
-       "1") reboot
-            ;;
-       "2") shutdown -h 0
-            ;;
-         *) clear
-         
-            if [[ ! $(ping -c 1 google.com) ]]; then
-				echo -e "\nThe Architect Installation Framework requires an active internet connection. It can then be re-started with the following command: /initialise\n"
-            else 
-				echo -e "\nThe Architect Installation Framework can be re-started with the following command: /initialise\n"
-	        fi
-	        
-	        exit 0
-            ;;
-   esac
+	case $(cat ${OPT}) in
+	"1") reboot
+		;;
+	"2") shutdown -h 0
+		;;
+	 *) clear
+		if [[ ! $(ping -c 1 google.com) ]]; then
+			echo -e "\nThe Architect Installation Framework requires an active internet connection. It can then be re-started with the following command: /initialise\n"
+		else 
+			echo -e "\nThe Architect Installation Framework can be re-started with the following command: /initialise\n"
+		fi
+		exit 0
+		;;
+	esac
 }
 
 # Main body
-
-    please_wait
+please_wait
     
-    # If no ethernet connection detected, then offer these options
-	while [[ ! $(ping -c 1 google.com) ]]; do
-		
-		dialog --backtitle "$VERSION" --title " Network Error " \
+# If no ethernet connection detected, then offer these options
+while [[ ! $(ping -c 1 google.com) ]]; do
+	dialog --backtitle "$VERSION" --title " Network Error " \
 		--menu $"\nPlease choose / Gelieve te kiezen / Bitte wählen / Scegli / Vennligst velg / Por favor elija\n" 0 0 3 \
 		"1" $"Ethernet" \
 		"2" $"Wifi" \
 		"3" $"Exit" 2>${OPT}
 	
-		case $(cat ${OPT}) in
-		"1") ether_connect 
-            ;;
-		"2") if [[ $WIFI_DEV != "" ]]; then
-				wifi_connect
-		     else
-		        dialog --backtitle "$VERSION" --title " Network Error " --msgbox "\nNo Wifi Device Found!\n\n" 0 0
-		     fi
-            ;;
+	case $(cat ${OPT}) in
+	"1") ether_connect 
+		;;
+	"2") if [[ $WIFI_DEV != "" ]]; then
+		wifi_connect
+	     else
+		dialog --backtitle "$VERSION" --title " Network Error " --msgbox "\nNo Wifi Device Found!\n\n" 0 0
+	     fi
+		;;
          *) break
-			exit 1
-            ;;
-		esac
-	done
+		exit 1
+		;;
+	esac
+done
 	
-	[[ $(ping -c 1 google.com) ]] && download_aif
+[[ $(ping -c 1 google.com) ]] && download_aif
 	
-	# Whether successful or not, offer to reboot, shutdown, or exit to vc
-	inst_complete
+# Whether successful or not, offer to reboot, shutdown, or exit to vc
+inst_complete

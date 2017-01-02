@@ -2,8 +2,8 @@
 
 set -e -u
 
-iso_name=archlinux
-iso_label="ARCH_$(date +%Y%m)"
+iso_name=tmnmlst_archlinux
+iso_label="TMNMLST_ARCH_$(date +%Y%m)"
 iso_version=$(date +%Y.%m.%d)
 install_dir=arch
 work_dir=work
@@ -54,7 +54,7 @@ make_pacman_conf() {
 # Base installation, plus needed packages (airootfs)
 make_basefs() {
     setarch ${arch} mkarchiso ${verbose} -w "${work_dir}/${arch}" -C "${work_dir}/pacman.conf" -D "${install_dir}" init
-    setarch ${arch} mkarchiso ${verbose} -w "${work_dir}/${arch}" -C "${work_dir}/pacman.conf" -D "${install_dir}" -p "haveged intel-ucode memtest86+ mkinitcpio-nfs-utils nbd zsh" install
+    setarch ${arch} mkarchiso ${verbose} -w "${work_dir}/${arch}" -C "${work_dir}/pacman.conf" -D "${install_dir}" -p "haveged intel-ucode zsh" install
 }
 
 # Additional packages (airootfs)
@@ -72,7 +72,7 @@ make_setup_mkinitcpio() {
     local _hook
     mkdir -p ${work_dir}/${arch}/airootfs/etc/initcpio/hooks
     mkdir -p ${work_dir}/${arch}/airootfs/etc/initcpio/install
-    for _hook in archiso archiso_shutdown archiso_pxe_common archiso_pxe_nbd archiso_pxe_http archiso_pxe_nfs archiso_loop_mnt; do
+    for _hook in archiso archiso_shutdown archiso_loop_mnt; do
         cp /usr/lib/initcpio/hooks/${_hook} ${work_dir}/${arch}/airootfs/etc/initcpio/hooks
         cp /usr/lib/initcpio/install/${_hook} ${work_dir}/${arch}/airootfs/etc/initcpio/install
     done
@@ -95,7 +95,7 @@ make_setup_mkinitcpio() {
 make_customize_airootfs() {
     cp -af ${script_path}/airootfs ${work_dir}/${arch}
 
-    curl -o ${work_dir}/${arch}/airootfs/etc/pacman.d/mirrorlist 'https://www.archlinux.org/mirrorlist/?country=all&protocol=http&use_mirror_status=on'
+    curl -o ${work_dir}/${arch}/airootfs/etc/pacman.d/mirrorlist 'https://www.archlinux.org/mirrorlist/?country=BR&protocol=http&use_mirror_status=on'
 
     lynx -dump -nolist 'https://wiki.archlinux.org/index.php/Installation_Guide?action=render' >> ${work_dir}/${arch}/airootfs/root/install.txt
 
@@ -112,8 +112,6 @@ make_boot() {
 
 # Add other aditional/extra files to ${install_dir}/boot/
 make_boot_extra() {
-    cp ${work_dir}/${arch}/airootfs/boot/memtest86+/memtest.bin ${work_dir}/iso/${install_dir}/boot/memtest
-    cp ${work_dir}/${arch}/airootfs/usr/share/licenses/common/GPL2/license.txt ${work_dir}/iso/${install_dir}/boot/memtest.COPYING
     cp ${work_dir}/${arch}/airootfs/boot/intel-ucode.img ${work_dir}/iso/${install_dir}/boot/intel_ucode.img
     cp ${work_dir}/${arch}/airootfs/usr/share/licenses/intel-ucode/LICENSE ${work_dir}/iso/${install_dir}/boot/intel_ucode.LICENSE
 }
@@ -127,11 +125,6 @@ make_syslinux() {
     done
     cp ${script_path}/syslinux/splash.png ${work_dir}/iso/${install_dir}/boot/syslinux
     cp ${work_dir}/${arch}/airootfs/usr/lib/syslinux/bios/*.c32 ${work_dir}/iso/${install_dir}/boot/syslinux
-    cp ${work_dir}/${arch}/airootfs/usr/lib/syslinux/bios/lpxelinux.0 ${work_dir}/iso/${install_dir}/boot/syslinux
-    cp ${work_dir}/${arch}/airootfs/usr/lib/syslinux/bios/memdisk ${work_dir}/iso/${install_dir}/boot/syslinux
-    mkdir -p ${work_dir}/iso/${install_dir}/boot/syslinux/hdt
-    gzip -c -9 ${work_dir}/${arch}/airootfs/usr/share/hwdata/pci.ids > ${work_dir}/iso/${install_dir}/boot/syslinux/hdt/pciids.gz
-    gzip -c -9 ${work_dir}/${arch}/airootfs/usr/lib/modules/*-ARCH/modules.alias > ${work_dir}/iso/${install_dir}/boot/syslinux/hdt/modalias.gz
 }
 
 # Prepare /isolinux
@@ -148,7 +141,6 @@ make_efi() {
     mkdir -p ${work_dir}/iso/EFI/boot
     cp ${work_dir}/x86_64/airootfs/usr/share/efitools/efi/PreLoader.efi ${work_dir}/iso/EFI/boot/bootx64.efi
     cp ${work_dir}/x86_64/airootfs/usr/share/efitools/efi/HashTool.efi ${work_dir}/iso/EFI/boot/
-
     cp ${work_dir}/x86_64/airootfs/usr/lib/systemd/boot/efi/systemd-bootx64.efi ${work_dir}/iso/EFI/boot/loader.efi
 
     mkdir -p ${work_dir}/iso/loader/entries
@@ -178,13 +170,11 @@ make_efiboot() {
     mkdir -p ${work_dir}/efiboot/EFI/archiso
     cp ${work_dir}/iso/${install_dir}/boot/x86_64/vmlinuz ${work_dir}/efiboot/EFI/archiso/vmlinuz.efi
     cp ${work_dir}/iso/${install_dir}/boot/x86_64/archiso.img ${work_dir}/efiboot/EFI/archiso/archiso.img
-
     cp ${work_dir}/iso/${install_dir}/boot/intel_ucode.img ${work_dir}/efiboot/EFI/archiso/intel_ucode.img
 
     mkdir -p ${work_dir}/efiboot/EFI/boot
     cp ${work_dir}/x86_64/airootfs/usr/share/efitools/efi/PreLoader.efi ${work_dir}/efiboot/EFI/boot/bootx64.efi
     cp ${work_dir}/x86_64/airootfs/usr/share/efitools/efi/HashTool.efi ${work_dir}/efiboot/EFI/boot/
-
     cp ${work_dir}/x86_64/airootfs/usr/lib/systemd/boot/efi/systemd-bootx64.efi ${work_dir}/efiboot/EFI/boot/loader.efi
 
     mkdir -p ${work_dir}/efiboot/loader/entries
@@ -213,7 +203,7 @@ make_prepare() {
 
 # Build ISO
 make_iso() {
-    mkarchiso ${verbose} -w "${work_dir}" -D "${install_dir}" -L "${iso_label}" -o "${out_dir}" iso "${iso_name}-${iso_version}-dual.iso"
+    mkarchiso ${verbose} -w "${work_dir}" -D "${install_dir}" -L "${iso_label}" -o "${out_dir}" iso "${iso_name}-${iso_version}-x86_64.iso"
 }
 
 if [[ ${EUID} -ne 0 ]]; then
@@ -248,32 +238,19 @@ mkdir -p ${work_dir}
 
 run_once make_pacman_conf
 
-# Do all stuff for each airootfs
-for arch in i686 x86_64; do
-    run_once make_basefs
-    run_once make_packages
-done
-
+run_once make_basefs
+run_once make_packages
 run_once make_packages_efi
 
-for arch in i686 x86_64; do
-    run_once make_setup_mkinitcpio
-    run_once make_customize_airootfs
-done
+run_once make_setup_mkinitcpio
+run_once make_customize_airootfs
 
-for arch in i686 x86_64; do
-    run_once make_boot
-done
-
-# Do all stuff for "iso"
+run_once make_boot
 run_once make_boot_extra
 run_once make_syslinux
 run_once make_isolinux
 run_once make_efi
 run_once make_efiboot
 
-for arch in i686 x86_64; do
-    run_once make_prepare
-done
-
+run_once make_prepare
 run_once make_iso
