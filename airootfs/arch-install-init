@@ -1,0 +1,82 @@
+#!/bin/bash
+set -e
+#===============================================================================
+#
+# Author	: tmnmlst
+#
+#===============================================================================
+
+VERSION="Arch Installation"
+
+LOG="arch_install.log"
+OPT=$(mktemp -t .opt.XXXXXX)
+
+
+please_wait() {
+	dialog --backtitle "$VERSION" --title " Searching for Network Connection " --infobox "\nPlease wait... \n" 0 0
+	sleep 8
+}
+
+wifi_connection(){
+	WIFI_DEV=$(ip link | awk '{print $2}' | grep -i "wl" | sed 's/://')
+	if [[ -n $WIFI_DEV ]]; then
+		if [[ -n $(systemctl status dhcpcd | grep "running") ]]; then
+			systemctl disable dhcpcd
+			systemctl stop dhcpcd
+		fi
+		rfkill unblock wlan
+		ip link set $WIFI_DEV down
+		wifi-menu
+		echo "Connecting through wifi..."
+	else
+		echo "No wifi device found!"
+	fi
+	sleep 2
+}
+
+download_ai() {
+	clear
+	wget -N https://github.com/jonatascmedeiros/arch-install/archive/master.zip
+	unzip -o master.zip -d /
+	/arch-install-master/arch-install
+}
+
+exit_menu() {
+	dialog --backtitle "$VERSION" --title " Installation Complete " --menu "\nPlease choose\n" 0 0 3 \
+		"1" "Reboot" \
+		"2" "Shutdown" \
+		"3" "Virtual Console" 2>${OPT}
+	case $(cat ${OPT}) in
+		"1")
+			reboot
+			;;
+		"2")
+			shutdown -h 0
+			;;
+		*)
+			clear
+			echo -e "\nThe Arch Installer can be re-started with the following command: /arch-install-init\n"
+			exit 0
+			;;
+	esac
+}
+
+please_wait
+
+until ping -c 1 www.google.com &>"$LOG"; do
+	dialog --backtitle "$VERSION" --title " Network Error " --yesno "\nNot connected. Would you like to setup wifi connection?\n" 0 0
+	if [[ $? -eq 0 ]]; then
+			wifi_connection
+	else
+		dialog --backtitle "$VERSION" --title " Network Error " --msgbox "\nAn internet connection is required for system instalation.\n" --ok-label "Exit" 0 0
+		clear
+		exit 1
+	fi	
+done
+
+dialog --backtitle "$VERSION" --title " Searching Network Connection " --infobox "\nConnected!\n" 0 0
+sleep 2
+
+#download_ai
+
+exit_menu
